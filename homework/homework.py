@@ -92,3 +92,168 @@
 # {'type': 'cm_matrix', 'dataset': 'train', 'true_0': {"predicted_0": 15562, "predicte_1": 666}, 'true_1': {"predicted_0": 3333, "predicted_1": 1444}}
 # {'type': 'cm_matrix', 'dataset': 'test', 'true_0': {"predicted_0": 15562, "predicte_1": 650}, 'true_1': {"predicted_0": 2490, "predicted_1": 1420}}
 #
+
+
+
+# flake8: noqa: E501
+"""Tarea 1"""
+
+import gzip
+import json
+import os
+import pickle
+
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import (
+    accuracy_score,
+    balanced_accuracy_score,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+)
+from sklearn.model_selection import GridSearchCV, train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+
+
+def clean_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Limpia el dataframe.
+
+    Args:
+        df (pd.DataFrame): dataframe a limpiar.
+
+    Returns:
+        pd.DataFrame: dataframe limpio.
+    """
+    print("Limpiando datos...")
+    df = df.rename(columns={"default payment next month": "default"})
+    df = df.drop(columns=["ID"])
+    df = df.dropna()
+    df["EDUCATION"] = df["EDUCATION"].apply(lambda x: 4 if x > 4 else x)
+    return df
+
+
+def create_pipeline() -> Pipeline:
+    """Crea un pipeline para el modelo.
+
+    Returns:
+        Pipeline: pipeline para el modelo.
+    """
+    print("Creando pipeline...")
+    pipeline = Pipeline(
+        [
+            ("encoder", OneHotEncoder(handle_unknown="ignore")),
+            ("model", RandomForestClassifier(random_state=42)),
+        ]
+    )
+    return pipeline
+
+
+def optimize_hyperparameters(
+    pipeline: Pipeline, x_train: pd.DataFrame, y_train: pd.Series
+) -> GridSearchCV:
+    """Optimiza los hiperparámetros del pipeline.
+
+    Args:
+        pipeline (Pipeline): pipeline a optimizar.
+        x_train (pd.DataFrame): datos de entrenamiento.
+        y_train (pd.Series): etiquetas de entrenamiento.
+
+    Returns:
+        GridSearchCV: pipeline optimizado.
+    """
+    print("Optimizando hiperparámetros con validación cruzada (10 splits)...")
+    param_grid = {
+        "model__n_estimators": [50, 100, 200],
+        "model__max_depth": [10, 25],
+        "model__min_samples_split": [2, 5, 10],
+    }
+    grid_search = GridSearchCV(
+        pipeline, param_grid, cv=10, scoring="balanced_accuracy", verbose=2
+    )  # verbose=2 para mostrar progreso
+    grid_search.fit(x_train, y_train)
+    return grid_search
+
+
+def calculate_metrics(
+    model: GridSearchCV, x_train: pd.DataFrame, y_train: pd.Series, x_test: pd.DataFrame, y_test: pd.Series
+) -> list:
+    """Calcula las métricas para el modelo.
+
+    Args:
+        model (GridSearchCV): modelo a evaluar.
+        x_train (pd.DataFrame): datos de entrenamiento.
+        y_train (pd.Series): etiquetas de entrenamiento.
+        x_test (pd.DataFrame): datos de prueba.
+        y_test (pd.Series): etiquetas de prueba.
+
+    Returns:
+        list: lista de métricas.
+    """
+    print("Calculando métricas...")
+    metrics = []
+    for dataset, x, y in [("train", x_train, y_train), ("test", x_test, y_test)]:
+        y_pred = model.predict(x)
+        metrics.append(
+            {
+                "type": "metrics",
+                "dataset": dataset,
+                "precision": precision_score(y, y_pred),
+                "balanced_accuracy": balanced_accuracy_score(y, y_pred),
+                "recall": recall_score(y, y_pred),
+                "f1_score": f1_score(y, y_pred),
+            }
+        )
+        cm = confusion_matrix(y, y_pred)
+        metrics.append(
+            {
+                "type": "cm_matrix",
+                "dataset": dataset,
+                "true_0": {"predicted_0": int(cm[0, 0]), "predicted_1": int(cm[0, 1])},
+                "true_1": {"predicted_0": int(cm[1, 0]), "predicted_1": int(cm[1, 1])},
+            }
+        )
+    return metrics
+
+
+def main():
+    """Función principal."""
+
+    print("Cargando datos...")
+    train_df = pd.read_csv("files/input/train_data.csv.zip")
+    test_df = pd.read_csv("files/input/test_data.csv.zip")
+
+    train_df = clean_data(train_df)
+    test_df = clean_data(test_df)
+
+    print("Dividiendo datos...")
+    x_train = train_df.drop(columns=["default"])
+    y_train = train_df["default"]
+    x_test = test_df.drop(columns=["default"])
+    y_test = test_df["default"]
+
+    pipeline = create_pipeline()
+
+    model = optimize_hyperparameters(pipeline, x_train, y_train)
+
+    print("Guardando modelo...")
+    os.makedirs("files/models", exist_ok=True)
+    with gzip.open("files/models/model.pkl.gz", "wb") as file:
+        pickle.dump(model, file)
+
+    metrics = calculate_metrics(model, x_train, y_train, x_test, y_test)
+
+    print("Guardando métricas...")
+    os.makedirs("files/output", exist_ok=True)
+    with open("files/output/metrics.json", "w", encoding="utf-8") as file:
+        for metric in metrics:
+            file.write(json.dumps(metric) + "\n")
+
+    print("Proceso completado.")
+
+
+if __name__ == "__main__":
+    main()
