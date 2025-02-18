@@ -151,7 +151,6 @@ def create_pipeline() -> Pipeline:
     )
     return pipeline
 
-
 def optimize_hyperparameters(
     pipeline: Pipeline, x_train: pd.DataFrame, y_train: pd.Series
 ) -> GridSearchCV:
@@ -167,14 +166,18 @@ def optimize_hyperparameters(
     """
     print("Optimizando hiperparámetros con validación cruzada (10 splits)...")
     param_grid = {
-        "model__n_estimators": [50, 100, 200],
-        "model__max_depth": [10, 25],
-        "model__min_samples_split": [2, 5, 10],
+    "model__n_estimators": [75],  # Prueba más árboles
+    "model__max_depth": [50],  # 20, 130 Diferentes profundidades
+    "model__min_samples_split": [20],  # Diferentes tamaños de división
+    "model__min_samples_leaf": [1],  # Diferentes tamaños de hoja
     }
     grid_search = GridSearchCV(
         pipeline, param_grid, cv=10, scoring="balanced_accuracy", verbose=2
     )  # verbose=2 para mostrar progreso
     grid_search.fit(x_train, y_train)
+    
+    print("Mejor conjunto de hiperparámetros encontrados:", grid_search.best_params_)
+    
     return grid_search
 
 
@@ -251,6 +254,18 @@ def main():
     with open("files/output/metrics.json", "w", encoding="utf-8") as file:
         for metric in metrics:
             file.write(json.dumps(metric) + "\n")
+
+    print("Proceso completado.")
+
+    # Imprimir la precisión del modelo
+    precision_train = next(
+        metric["precision"] for metric in metrics if metric["dataset"] == "train"
+    )
+    precision_test = next(
+        metric["precision"] for metric in metrics if metric["dataset"] == "test"
+    )
+    print(f"Precisión en entrenamiento: {precision_train:.4f}")
+    print(f"Precisión en prueba: {precision_test:.4f}")
 
     print("Proceso completado.")
 
