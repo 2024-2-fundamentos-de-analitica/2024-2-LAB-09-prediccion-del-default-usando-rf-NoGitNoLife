@@ -48,11 +48,11 @@ class ModelBuilder:
     def create_grid_search(self, pipeline: Pipeline) -> GridSearchCV:
         """Configure grid search with hyperparameters"""
         hyperparameters = {
-            'classifier__n_estimators': [50, 75, 200],
-        'classifier__min_samples_leaf': [1, 4],
-	    'classifier__max_depth': [5, 20,50],
-	    'classifier__min_samples_split': [2, 5, 20],
-	    
+            'classifier__n_estimators': [100, 75],
+        'classifier__min_samples_leaf': [1],
+        'estimator__class_weight': [None],
+	    'classifier__max_depth': [None, 10],
+	    'classifier__min_samples_split': [2],
         }
         
         return GridSearchCV(
